@@ -15,7 +15,6 @@ mongoose.connect(URL, {
   useCreateIndex: true
 });
 //Models
-// require('../model/user');
 var db = mongoose.connection;
 
 //We enebled the Listener

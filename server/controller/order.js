@@ -1,13 +1,9 @@
 var orderWorker = require('../mongoose/worker/order');
 var inventoryWorker = require('../mongoose/worker/inventory');
 
-exports.createOrder = function (req, res, next) {
-    var body = new Order(req.body);
-    if (!body.inventories || !body.inventories.length) {
-        res.status(400).send("Inventories can't be empty");
-    }
 
-    // Check inventory quantity
+var modifyOrderAndInventory = function (action, id, body, req, res, next)  {
+    // Check existing inventory quantity
     // Time Complexity O(n)
     // Space Complexity O(n)
     inventoryWorker.findInventory({}, function (error, inventories) {
@@ -23,21 +19,22 @@ exports.createOrder = function (req, res, next) {
                 }
             });
 
-            console.log(nameToInvMap);
-
             var invsInReq = body.inventories;
-
-            invsInReq.forEach( item => {
+            var testPass = true;
+            invsInReq.forEach(item => {
                 var inv2 = nameToInvMap.get(item.name);
                 if (inv2 && item.quantity > inv2.quantity) {
                     res.status(400).send("The item " + item.name + " doesn't have enough quantity!");
+                    testPass = false;
                 }
             });
-
-            // Place order
-            orderWorker.createOrder(body, function (error, response) {
+            if (!testPass) {
+                return;
+            }
+            // Update/Create order
+            action(id, body, function (error, response) {
                 if (response) {
-                    
+                    var updatePass = true;
                     // if order success, we should update inventory quantity
                     invsInReq.forEach(item => {
                         var inv3 = nameToInvMap.get(item.name);
@@ -51,14 +48,18 @@ exports.createOrder = function (req, res, next) {
                                     };
                                     orderWorker.deleteOrder(query, null);
                                     res.status(400).send("Error occured while update inventory quantity");
+                                    updatePass = false;
                                 }
                             });
-                        } 
+                        }
                     });
-
+                    
+                    if(!updatePass) {
+                        return;
+                    }
                     // every thing success, send 200 back.
                     res.status(201).send(response);
-                    
+
                 } else if (error) {
                     res.status(400).send(error);
                 }
@@ -68,7 +69,15 @@ exports.createOrder = function (req, res, next) {
             res.status(400).send(error);
         }
     });
-    
+};
+
+exports.createOrder = function (req, res, next) {
+    var body = new Order(req.body);
+    if (!body.inventories || !body.inventories.length) {
+        res.status(400).send("Inventories can't be empty");
+    }
+
+    modifyOrderAndInventory(orderWorker.createOrder, null, body, req, res, next);  
 };
 
 exports.getAllOrders = function (req, res, next) {
@@ -96,7 +105,7 @@ exports.getOrderById = function (req, res, next) {
     });
 };
 
-exports.updateOrderById = function (req, res, next) {
+exports.updateOrderById = function (req, res, next, ) {
     var params = req.params || {};
     var id = params.id;
     if (!id) {
@@ -104,14 +113,7 @@ exports.updateOrderById = function (req, res, next) {
     }
     var body = new Order(req.body);
     
-
-    orderWorker.updateOrderById(id, body, function (error, response) {
-        if (response) {
-            res.status(200).send(response);
-        } else if (error) {
-            res.status(400).send(error);
-        }
-    });
+    modifyOrderAndInventory(orderWorker.updateOrderById, id, body, req, res, next);
 };
 
 exports.deleteOrderById = function (req, res, next) {

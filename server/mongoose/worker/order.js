@@ -2,7 +2,7 @@
   var mongoose = require("mongoose");
   var order = mongoose.model("Order");
 
-  exports.createOrder = function(data, callback) {
+  exports.createOrder = function(_, data, callback) { 
     order.create(data).then(
       response => {
         callback(null, response);

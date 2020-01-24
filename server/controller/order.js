@@ -8,6 +8,8 @@ exports.createOrder = function (req, res, next) {
     }
 
     // Check inventory quantity
+    // Time Complexity O(n)
+    // Space Complexity O(n)
     inventoryWorker.findInventory({}, function (error, inventories) {
         if (inventories) {
             var nameToInvMap = new Map();
@@ -17,15 +19,15 @@ exports.createOrder = function (req, res, next) {
                     inv.quantity += item.quantity;
                     nameToInvMap.set(inv);
                 } else {
-                    nameToInvMap.set(item.name, inv);
+                    nameToInvMap.set(item.name, item);
                 }
             });
 
             console.log(nameToInvMap);
 
-            var invsInOrder = body.inventories;
+            var invsInReq = body.inventories;
 
-            invsInOrder.forEach( item => {
+            invsInReq.forEach( item => {
                 var inv2 = nameToInvMap.get(item.name);
                 if (inv2 && item.quantity > inv2.quantity) {
                     res.status(400).send("The item " + item.name + " doesn't have enough quantity!");
@@ -35,9 +37,9 @@ exports.createOrder = function (req, res, next) {
             // Place order
             orderWorker.createOrder(body, function (error, response) {
                 if (response) {
-
+                    
                     // if order success, we should update inventory quantity
-                    invsInOrder.forEach(item => {
+                    invsInReq.forEach(item => {
                         var inv3 = nameToInvMap.get(item.name);
                         if (inv3) {
                             inv3.quantity -= item.quantity;

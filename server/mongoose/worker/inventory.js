@@ -3,7 +3,7 @@
     var inventory = mongoose.model('Inventory');
 
     exports.createInventory = function(data, callback) {
-        console.log("data:", data);
+
         inventory.create(data).then(response => {
           console.log(response);
           callback(null, response);

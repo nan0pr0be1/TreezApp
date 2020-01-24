@@ -3,13 +3,70 @@ var inventoryWorker = require('../mongoose/worker/inventory');
 
 exports.createOrder = function (req, res, next) {
     var body = new Order(req.body);
-    orderWorker.createOrder(body, function (error, response) {
-        if (response) {
-            res.status(201).send(response);
+    if (!body.inventories || !body.inventories.length) {
+        res.status(400).send("Inventories can't be empty");
+    }
+
+    // Check inventory quantity
+    inventoryWorker.findInventory({}, function (error, inventories) {
+        if (inventories) {
+            var nameToInvMap = new Map();
+            inventories.forEach(item => {
+                var inv = nameToInvMap.get(item.name);
+                if (inv) {
+                    inv.quantity += item.quantity;
+                    nameToInvMap.set(inv);
+                } else {
+                    nameToInvMap.set(item.name, inv);
+                }
+            });
+
+            console.log(nameToInvMap);
+
+            var invsInOrder = body.inventories;
+
+            invsInOrder.forEach( item => {
+                var inv2 = nameToInvMap.get(item.name);
+                if (inv2 && item.quantity > inv2.quantity) {
+                    res.status(400).send("The item " + item.name + " doesn't have enough quantity!");
+                }
+            });
+
+            // Place order
+            orderWorker.createOrder(body, function (error, response) {
+                if (response) {
+
+                    // if order success, we should update inventory quantity
+                    invsInOrder.forEach(item => {
+                        var inv3 = nameToInvMap.get(item.name);
+                        if (inv3) {
+                            inv3.quantity -= item.quantity;
+                            inventoryWorker.updateInventoryById(inv3._id, inv3, function (error, response) {
+                                if (error) {
+                                    // Delete the order if error happened. 
+                                    var query = {
+                                        _id: response._id
+                                    };
+                                    orderWorker.deleteOrder(query, null);
+                                    res.status(400).send("Error occured while update inventory quantity");
+                                }
+                            });
+                        } 
+                    });
+
+                    // every thing success, send 200 back.
+                    res.status(201).send(response);
+                    
+                } else if (error) {
+                    res.status(400).send(error);
+                }
+            });
+
         } else if (error) {
             res.status(400).send(error);
         }
     });
+    
 };
 
 exports.getAllOrders = function (req, res, next) {
@@ -44,7 +101,7 @@ exports.updateOrderById = function (req, res, next) {
         res.status(400).send("Bad Request");
     }
     var body = new Order(req.body);
-    // TODO: if body equal null, do we still allow user to update? or return an error?
+    
 
     orderWorker.updateOrderById(id, body, function (error, response) {
         if (response) {
